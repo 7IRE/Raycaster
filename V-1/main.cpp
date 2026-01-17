@@ -7,6 +7,8 @@
 #define PI 3.1415926535
 using namespace std;
 
+float DegToRad(float a){return a*M_PI/180;}
+float fixAng(float a){if(a<0){ a+=360;}     if(a>360){a -=360;} return a;} 
 
 float distance(float ax , float ay, float bx, float by){
     return (sqrt((bx-ax)*(bx-ax) + (by-ay)*(by-ay)));
@@ -104,12 +106,12 @@ void Game::Rays(){
         if(ra<90 ||ra>270){rx=(((int)px>>6)<<6)+64; ry = (px-rx)*nTan+py; xo=64; yo=-xo*nTan;}
         if(ra==90 || ra==270 ){rx=px; ry=py; dof=8;}
         while(dof<8){
-            mx=(int)(rx)>>6; my=(int)(ry)>>6; mp=my*8+mx;
+             mx=(int)(rx)>>6; my=(int)(ry)>>6; mp=my*8+mx;
             if(mp>0 && mp<8*8 && mapdataWall[mp]>0){hmt = mapdataWall[mp]-1;dof=8; vx=rx,vy=ry,disV=distance(px,py,rx,ry);}
             else{rx += xo; ry += yo; dof += 1;}
         }
         float shade=1;
-        if(disV<disH){hmt-vmt; shade= 0.5; rx=vx,ry=vy; disT=disV;}
+        if(disV<disH){hmt=vmt; shade= 0.5; rx=vx,ry=vy; disT=disV;}
         else{rx=hx,ry=hy; disT=disH; shade = 1;}
         std::array line={
             sf::Vertex{sf::Vector2f(px,py)},
@@ -131,9 +133,10 @@ void Game::Rays(){
         float tx;
         if(shade==1){tx=(int)(rx/2.0)%32; if(ra>180){tx=31-tx;}}
         else{tx=(int)(ry/2.0)%32; if(ra>90  && ra<270){tx=31-tx;}}
+         sf::RectangleShape rectangle({8.f,8.f});   
         for(int y=0;y<lineH;y++){
             float c=All_Textures[(int)(((int)ty)*32) + (int)(tx)]*shade;
-            sf::RectangleShape rectangle({8.f,8.f});   
+           
             // rectangle.setFillColor(sf::Color::Red);
             if(disV<disH){ rectangle.setFillColor(sf::Color(255*c,255*c,255*c));}
             else{rectangle.setFillColor(sf::Color(255*c,255*c,255*c));}
@@ -141,6 +144,19 @@ void Game::Rays(){
             window->draw(rectangle);
             ty+=ty_step;
         }
+
+        //draw floors
+        for(int y=lineO+lineH;y<320;y++){
+            float dy=y-(320/2.0),raFix=cos(pa-ra);
+            tx=px/2 + cos(ra)*158*32/dy/raFix;
+            ty=py/2 + sin(ra)*158*32/dy/raFix;
+            float c=All_Textures[((int)(ty)&31)*32 + ((int)(tx)&31)]*0.7;
+            
+            rectangle.setFillColor(sf::Color(255*c,255*c,255*c));
+            rectangle.setPosition(sf::Vector2f(r*8+530,y));      
+            window->draw(rectangle);
+        }
+
         ra += 1;
     }
     
