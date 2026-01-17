@@ -1,7 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <math.h>
-#include "Converter/Generated.c"
-#include "textures.c"
+#include "Converter/Generated.hpp"
 #define Wheight 512
 #define Wlength 1024
 #define PI 3.1415926535
@@ -35,9 +34,9 @@ class player {
     sf::CircleShape* Cpointer(){return P1;}
     sf::RectangleShape* Rpointer(){return Pline;}
     void updatepos(){P1->setPosition(sf::Vector2f(px-4,py-4));  Pline->setPosition(sf::Vector2f(px,py)); Pline->setRotation(sf::degrees(pa));}
-    void incpx(float i){px += i*pdx;}
+    void incpx(float i){px += 1.5*i*pdx;}
     void A(){pa -= 1; if(pa<0){pa += 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
-    void incpy(float i){py += i*pdy;}
+    void incpy(float i){py += 1.5*i*pdy;}
     void D(){pa += 1; if(pa>360){pa -= 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
     float pang(){return pa;}
     float pxpos(){return px;}
@@ -53,10 +52,10 @@ private:
     sf::RenderWindow *window;
     sf::RectangleShape *BRect,*WRect;
     player *p1;
-    int *mapdataWall,mapX,mapY,mapSize;
+    int *mapdataWall,*mapF,*mapC,mapX,mapY,mapSize;
 public:
-    Game();
-    void Editmap(int MapData[64] ); 
+    Game(int x=8 , int y=8);
+    void Editmap(int *MapData , int Mode ); 
     void GameLoop();
     void Render();
     void Inputs();
@@ -72,125 +71,169 @@ public:
 
 
 
-void Game::Rays(){
-    int vmt=0,hmt=0;
-    int r,mx,my,mp,dof,disT;
-    float rx,ry,ra,xo=0,yo=0;
-    float pa=p1->pang();
-    float px=p1->pxpos();
-    float py=p1->pypos();
-    ra=pa-30;
-    for(r=0;r<60;r++){
-        //Horizontal Check
-        if(ra < 0) ra += 360;
-        if(ra >= 360) ra -= 360;
-        dof=0;
-        float disH=10000000,hx=px,hy=py;
-        float aTan=0;
-        if(ra!=0&&ra!=180&&ra!=360){ aTan=-1/tan(ra*PI/180);}
-        if(ra>180){ry=(((int)py>>6)<<6)-0.0001; rx = (py-ry)*aTan+px; yo=-64; xo=-yo*aTan;}
-        if(ra<180){ry=(((int)py>>6)<<6)+64; rx = (py-ry)*aTan+px; yo=64; xo=-yo*aTan;}
-        if(ra==0 || ra==180 || ra==360){rx=px; ry=py; dof=8;}
-        while(dof<8){
-            mx=(int)(rx)>>6; my=(int)(ry)>>6; mp=my*8+mx;
-            if(mp>0 && mp<8*8 && mapdataWall[mp]>0){vmt = mapdataWall[mp]-1;dof=8; hx=rx,hy=ry,disH=distance(px,py,rx,ry);}
-            else{rx += xo; ry += yo; dof += 1;}
-        }
-        
-        //Vertical Check
-        dof=0;
-        float disV=10000000,vx=px,vy=py;
-        float nTan=0;
-        if(ra!=90&&ra!=270){ nTan=-tan(ra*PI/180);}
-        if(ra<270 && ra>90){rx=(((int)px>>6)<<6)-0.0001; ry = (px-rx)*nTan+py; xo=-64; yo=-xo*nTan;}
-        if(ra<90 ||ra>270){rx=(((int)px>>6)<<6)+64; ry = (px-rx)*nTan+py; xo=64; yo=-xo*nTan;}
-        if(ra==90 || ra==270 ){rx=px; ry=py; dof=8;}
-        while(dof<8){
-             mx=(int)(rx)>>6; my=(int)(ry)>>6; mp=my*8+mx;
-            if(mp>0 && mp<8*8 && mapdataWall[mp]>0){hmt = mapdataWall[mp]-1;dof=8; vx=rx,vy=ry,disV=distance(px,py,rx,ry);}
-            else{rx += xo; ry += yo; dof += 1;}
-        }
-        float shade=1;
-        if(disV<disH){hmt=vmt; shade= 0.5; rx=vx,ry=vy; disT=disV;}
-        else{rx=hx,ry=hy; disT=disH; shade = 1;}
-        std::array line={
-            sf::Vertex{sf::Vector2f(px,py)},
-            sf::Vertex{sf::Vector2f(rx,ry)}
-        };
-        line[0].color = sf::Color::Cyan;
-        line[1].color = sf::Color::Red;
-        window->draw(line.data(), line.size(), sf::PrimitiveType::Lines);
-
-        //3D Rendering
-        
-        float ca=pa-ra; if(ca<0){ca += 360;} if(ca>360){ca -= 360;} disT = disT*cos(ca*PI/180);
-        float lineH=(mapSize*320)/disT; 
-        float  ty_off=0;
-        float ty_step=32.0/lineH;
-        if(lineH>320){ty_off=(lineH-320)/2;lineH=320;}
-        float lineO=160-lineH/2;
-        float ty=ty_off*ty_step+((int)(hmt)*32); 
-        float tx;
-        if(shade==1){tx=(int)(rx/2.0)%32; if(ra>180){tx=31-tx;}}
-        else{tx=(int)(ry/2.0)%32; if(ra>90  && ra<270){tx=31-tx;}}
-         sf::RectangleShape rectangle({8.f,8.f});   
-        for(int y=0;y<lineH;y++){
-            float c=All_Textures[(int)(((int)ty)*32) + (int)(tx)]*shade;
-           
-            // rectangle.setFillColor(sf::Color::Red);
-            if(disV<disH){ rectangle.setFillColor(sf::Color(255*c,255*c,255*c));}
-            else{rectangle.setFillColor(sf::Color(255*c,255*c,255*c));}
-            rectangle.setPosition(sf::Vector2f(r*8+530,lineO+y));      
-            window->draw(rectangle);
-            ty+=ty_step;
-        }
-
-        //draw floors
-        for(int y=lineO+lineH;y<320;y++){
-            float dy=y-(320/2.0),raFix=cos(pa-ra);
-            tx=px/2 + cos(ra)*158*32/dy/raFix;
-            ty=py/2 + sin(ra)*158*32/dy/raFix;
-            float c=All_Textures[((int)(ty)&31)*32 + ((int)(tx)&31)]*0.7;
-            
-            rectangle.setFillColor(sf::Color(255*c,255*c,255*c));
-            rectangle.setPosition(sf::Vector2f(r*8+530,y));      
-            window->draw(rectangle);
-        }
-
-        ra += 1;
-    }
-    
-}
 
 
-Game::Game(){
+Game::Game(int x,int y){
     sf:: RenderWindow *Window = new sf::RenderWindow(sf::VideoMode({Wlength,Wheight}),"RayCaster Engine",sf::Style::Close);
     player *P1= new player(300,300);
     p1=P1;
     window=Window;
-    mapX=8,mapY=8,mapSize=64;
-    mapdataWall = new int[64];
-    int Mtemp[64] = {1,1,1,1,1,1,1,1,
-                     1,0,1,0,0,0,0,1,
-                     1,0,1,0,0,0,0,3,
-                     1,0,1,0,0,0,0,2,
-                     1,0,1,0,0,0,0,1, 
-                     1,0,0,0,0,1,0,1,
-                     4,0,0,0,0,0,0,1,
-                     1,1,1,1,1,1,1,1};
-    for(int i=0;i<64;i++){
-        mapdataWall[i]=Mtemp[i];
+    mapX=x,mapY=y,mapSize=64;
+    {
+        mapdataWall = new int[x*y];
+        for(int i=0;i<x*y;i++){
+            mapdataWall[i]=0;
+        }
+        for(int i=0;i<y;i++){
+            mapdataWall[i]=1;
+            mapdataWall[y*(x-1)+i]=1;
+        }
+        for(int i=0;i<x;i++){
+            mapdataWall[i*y]=1;
+            mapdataWall[i*(y)+y-1]=1;
+        }
     }
+    {mapC = new int[x*y];
+    
+    for(int i=0;i<x*y;i++){
+        mapC[i]=1;
+    }}
+    {mapF = new int[x*y];
+    for(int i=0;i<x*y;i++){
+        mapF[i]=2;
+    }}
     BRect=new sf::RectangleShape({62.f,62.f});
     WRect=new sf::RectangleShape({62.f,62.f});
     BRect->setFillColor(sf::Color::Black);
     WRect->setFillColor(sf::Color::White);
 }
 
+void Game::Rays() {
+    int vmt = 0, hmt = 0; 
+    int r, mx, my, mp, dof;
+    float rx, ry, ra, xo = 0, yo = 0, disT;
+    float disH, disV;
+    
+    float pa = p1->pang();
+    float px = p1->pxpos();
+    float py = p1->pypos();
+    
+    ra = fixAng(pa - 30); 
 
-void Game::Editmap(int MapData[64]){
-    for(int i=0;i<64;i++){
-        mapdataWall[i]=MapData[i];
+    for (r = 0; r < 60; r++) {
+        dof = 0; disH = 1e30;
+        float hx = px, hy = py;
+        float aTan = -1 / tan(ra * PI / 180.0);
+        if (ra > 180) { ry = (((int)py >> 6) << 6) - 0.0001; rx = (py - ry) * aTan + px; yo = -64; xo = -yo * aTan; }
+        else if (ra < 180) { ry = (((int)py >> 6) << 6) + 64; rx = (py - ry) * aTan + px; yo = 64; xo = -yo * aTan; }
+        else { rx = px; ry = py; dof = 8; }
+        while (dof < 8) {
+            mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = my * mapX + mx;
+            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { hmt = mapdataWall[mp] - 1; hx = rx; hy = ry; disH = distance(px, py, hx, hy); dof = 8; }
+            else { rx += xo; ry += yo; dof += 1; }
+        }
+
+        dof = 0; disV = 1e30;
+        float vx = px, vy = py;
+        float nTan = -tan(ra * PI / 180.0);
+        if (ra > 90 && ra < 270) { rx = (((int)px >> 6) << 6) - 0.0001; ry = (px - rx) * nTan + py; xo = -64; yo = -xo * nTan; }
+        else if (ra < 90 || ra > 270) { rx = (((int)px >> 6) << 6) + 64; ry = (px - rx) * nTan + py; xo = 64; yo = -xo * nTan; }
+        else { rx = px; ry = py; dof = 8; }
+        while (dof < 8) {
+            mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = my * mapX + mx;
+            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { vmt = mapdataWall[mp] - 1; vx = rx; vy = ry; disV = distance(px, py, vx, vy); dof = 8; }
+            else { rx += xo; ry += yo; dof += 1; }
+        }
+
+        float shade = 1.0;
+        int texNum;
+        if (disV < disH) { rx = vx; ry = vy; disT = disV; shade = 0.5; texNum = vmt; }
+        else { rx = hx; ry = hy; disT = disH; shade = 1.0; texNum = hmt; }
+
+        float ca = fixAng(pa - ra); 
+        disT = disT * cos(ca * PI / 180.0); 
+        float lineH = (64 * 320) / disT;
+        float ty_step = 32.0 / (float)lineH;
+        float ty_off = 0;
+        if (lineH > 320) { ty_off = (lineH - 320) / 2.0; lineH = 320; }
+        float lineO = 160 - lineH / 2;
+
+        float tx;
+        if (shade == 1.0) { tx = (int)(rx / 2.0) % 32; if (ra > 180) tx = 31 - tx; }
+        else { tx = (int)(ry / 2.0) % 32; if (ra > 90 && ra < 270) tx = 31 - tx; }
+
+        sf::RectangleShape rectangle({8.f, 1.f}); 
+        float ty = ty_off * ty_step;
+        for (int y = 0; y < (int)lineH; y++) {
+            int pixel_y = (int)ty & 31;
+            int tex_index = (texNum * 1024) + (pixel_y * 32 + (int)tx);
+            float c1 = Img[3*tex_index] * shade; 
+            float c2 = Img[3*tex_index+1] * shade; 
+            float c3 = Img[3*tex_index+2] * shade; 
+            rectangle.setFillColor(sf::Color( c1, c2, c3));
+            rectangle.setPosition(sf::Vector2f(r * 8 + 530, lineO + y));
+            window->draw(rectangle);
+            ty += ty_step;
+        }
+
+        float cosRa = cos(ra * PI / 180.0);
+        float sinRa = sin(ra * PI / 180.0);
+        float cosCa = cos(ca * PI / 180.0);
+
+        for (int y = (int)(lineO + lineH); y < 320; y++) {
+            float dy = y - 160.0;
+            if (dy < 1) dy = 1;
+            float dist = (160.0 * 32.0) / (dy * cosCa);
+
+            float worldX = px + cosRa * dist * 2.0;
+            float worldY = py + sinRa * dist * 2.0;
+            int mX = (int)(worldX) >> 6; 
+            int mY = (int)(worldY) >> 6;
+            int mp_floor = mY * mapX + mX;
+
+            int tx_f = (int)(worldX / 2.0) & 31;
+            int ty_f = (int)(worldY / 2.0) & 31;
+            int tex_pixel = ty_f * 32 + tx_f;
+
+            int floorTex = 0, ceilTex = 1;
+            if (mp_floor >= 0 && mp_floor < mapX*mapY) {
+                floorTex = mapF[mp_floor];
+                ceilTex = mapC[mp_floor];
+            }
+
+            float cf1 = Img[(floorTex * 1024 + tex_pixel)*3] ;
+            float cf2 = Img[(floorTex * 1024 + tex_pixel)*3+1] ;
+            float cf3 = Img[(floorTex * 1024 + tex_pixel)*3+2] ;
+            rectangle.setFillColor(sf::Color(cf1, cf2, cf3));
+            rectangle.setPosition(sf::Vector2f(r * 8 + 530, (float)y));
+            window->draw(rectangle);
+            
+            float cc1 = Img[(ceilTex * 1024 + tex_pixel)*3] ;
+            float cc2 = Img[(ceilTex * 1024 + tex_pixel)*3+1] ;
+            float cc3 = Img[(ceilTex * 1024 + tex_pixel)*3+2] ;
+            rectangle.setFillColor(sf::Color(cc1,cc2,cc3));
+            rectangle.setPosition(sf::Vector2f(r * 8 + 530, (float)(320 - y)));
+            window->draw(rectangle);
+        }
+        ra = fixAng(ra + 1);
+    }
+}
+
+void Game::Editmap(int *MapData , int Mode /*1 - wall , 2 - Floor , 3 - Celling*/){
+    if(Mode==1){
+        for(int i=0;i<64;i++){
+            mapdataWall[i]=MapData[i];
+        }
+    }
+    else if(Mode==2){
+        for(int i=0;i<64;i++){
+            mapF[i]=MapData[i];
+        }
+    }
+    else if(Mode==3){
+        for(int i=0;i<64;i++){
+            mapC[i]=MapData[i];
+        }
     }
 }
 
@@ -233,8 +276,8 @@ void Game::Render(){
 void Game::Inputs(){
     int xo=0; if(p1->pdxpos()<0){xo = -10;}else{xo=10;}
     int yo=0; if(p1->pdypos()<0){yo = -10;}else{yo=10;}
-    int ipx=p1->pxpos()/64; int ipx_add_xo=(p1->pxpos()+xo)/64; int ipx_sub_xo=(p1->pxpos()-xo)/64; 
-    int ipy=p1->pypos()/64; int ipy_add_yo=(p1->pypos()+yo)/64; int ipy_sub_yo=(p1->pypos()-yo)/64; 
+    int ipx=p1->pxpos()/mapSize; int ipx_add_xo=(p1->pxpos()+xo)/mapSize; int ipx_sub_xo=(p1->pxpos()-xo)/mapSize; 
+    int ipy=p1->pypos()/mapSize; int ipy_add_yo=(p1->pypos()+yo)/mapSize; int ipy_sub_yo=(p1->pypos()-yo)/mapSize; 
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)){
         p1->A();
     }
@@ -252,8 +295,8 @@ void Game::Inputs(){
     else if ( sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)){
         if(p1->pdxpos()<0){xo = -20;}else{xo=20;}
         if(p1->pdypos()<0){yo = -20;}else{yo=20;}
-        ipx=p1->pxpos()/64; ipx_add_xo=(p1->pxpos()+xo)/64; 
-        ipy=p1->pypos()/64; ipy_add_yo=(p1->pypos()+yo)/64; 
+        ipx=p1->pxpos()/mapSize; ipx_add_xo=(p1->pxpos()+xo)/mapSize; 
+        ipy=p1->pypos()/mapSize; ipy_add_yo=(p1->pypos()+yo)/mapSize; 
         if(mapdataWall[ipy_add_yo*mapX+ipx_add_xo]==4){mapdataWall[ipy_add_yo*mapX+ipx_add_xo]=0;} 
     }
 }
@@ -261,6 +304,6 @@ void Game::Inputs(){
 
 int main()
 {
-    Game G2;
+    Game G2(10,10);
     G2.GameLoop();
 }
