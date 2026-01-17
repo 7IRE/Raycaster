@@ -1,8 +1,10 @@
 #include <SFML/Graphics.hpp>
 #include <math.h>
 #include "Converter/Generated.hpp"
-#define Wheight 512
-#define Wlength 1024
+#include <iostream>
+#include <windows.h>
+#define Wheight 640
+#define Wlength 960
 #define PI 3.1415926535
 using namespace std;
 
@@ -19,7 +21,7 @@ class player {
         sf::CircleShape *P1;
         sf::RectangleShape *Pline;
     public:
-
+    float elapsedtime , prevtime;
     player(int x=300,int y=300){
         px=x,py=y;
         P1=new sf::CircleShape(4.f);
@@ -34,15 +36,16 @@ class player {
     sf::CircleShape* Cpointer(){return P1;}
     sf::RectangleShape* Rpointer(){return Pline;}
     void updatepos(){P1->setPosition(sf::Vector2f(px-4,py-4));  Pline->setPosition(sf::Vector2f(px,py)); Pline->setRotation(sf::degrees(pa));}
-    void incpx(float i){px += 1.5*i*pdx;}
-    void A(){pa -= 1; if(pa<0){pa += 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
-    void incpy(float i){py += 1.5*i*pdy;}
-    void D(){pa += 1; if(pa>360){pa -= 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
+    void incpx(float i){px += 2*50*i*pdx*elapsedtime;}
+    void A(){pa -= 2*25*elapsedtime; if(pa<0){pa += 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
+    void incpy(float i){py += 2*50*i*pdy*elapsedtime;}
+    void D(){pa += 2*25*elapsedtime; if(pa>360){pa -= 360;} pdx = cos(pa*PI/180); pdy = sin(pa*PI/180);}
     float pang(){return pa;}
     float pxpos(){return px;}
     float pypos(){return py;}
     float pdxpos(){return pdx;}
     float pdypos(){return pdy;}
+    void psetpos(int x,int y){px=x,py=y;}
     ~player(){delete P1;}
 };
 
@@ -50,9 +53,12 @@ class player {
 class Game  {
 private:
     sf::RenderWindow *window;
+    sf::Font font;
     sf::RectangleShape *BRect,*WRect;
     player *p1;
     int *mapdataWall,*mapF,*mapC,mapX,mapY,mapSize;
+    sf::Clock *Clck;
+    int state;
 public:
     Game(int x=8 , int y=8);
     void Editmap(int *MapData , int Mode ); 
@@ -60,9 +66,17 @@ public:
     void Render();
     void Inputs();
     void Rays();
+    void Win();
+    void Lose();
+    void setstate(int x){state=x;}
+    int getstate(){return state;}
+    player *pptr(){return p1;}
     ~Game(){
         delete p1; 
+        delete Clck;
         delete []mapdataWall; 
+        delete []mapF;
+        delete []mapC;
         delete BRect;
         delete WRect;
         delete window;
@@ -70,14 +84,42 @@ public:
 };
 
 
+void Game::Win(){
+    window->clear(sf::Color(50,255,50));
+    font.openFromFile("Ariel2.ttf");
+    sf::Text text(font); 
+    text.setString("YOU WIN");
+    text.setCharacterSize(100); 
+    text.setFillColor(sf::Color::Black);
+    text.setStyle(sf::Text::Bold);
+    text.setPosition(sf::Vector2f(Wlength / 2.0f-100, Wheight / 2.0f-100));
+    window->draw(text);
+    window->display();
+}
+
+void Game::Lose(){
+    window->clear(sf::Color(255,50,50));
+    font.openFromFile("Ariel2.ttf");
+    sf::Text text(font); 
+    text.setString("YOU LOSE");
+    text.setCharacterSize(100); 
+    text.setFillColor(sf::Color::Black);
+    text.setStyle(sf::Text::Bold);
+    text.setPosition(sf::Vector2f(Wlength / 2.0f-100, Wheight / 2.0f-100));
+    window->draw(text);
+    window->display();
+}
 
 
 
 Game::Game(int x,int y){
+    Clck= new sf::Clock;
     sf:: RenderWindow *Window = new sf::RenderWindow(sf::VideoMode({Wlength,Wheight}),"RayCaster Engine",sf::Style::Close);
     player *P1= new player(300,300);
     p1=P1;
+    state=1;
     window=Window;
+    p1->elapsedtime=0,p1->prevtime=0;
     mapX=x,mapY=y,mapSize=64;
     {
         mapdataWall = new int[x*y];
@@ -120,16 +162,16 @@ void Game::Rays() {
     
     ra = fixAng(pa - 30); 
 
-    for (r = 0; r < 60; r++) {
+    for (r = 0; r < 120; r++) {
         dof = 0; disH = 1e30;
         float hx = px, hy = py;
         float aTan = -1 / tan(ra * PI / 180.0);
         if (ra > 180) { ry = (((int)py >> 6) << 6) - 0.0001; rx = (py - ry) * aTan + px; yo = -64; xo = -yo * aTan; }
         else if (ra < 180) { ry = (((int)py >> 6) << 6) + 64; rx = (py - ry) * aTan + px; yo = 64; xo = -yo * aTan; }
-        else { rx = px; ry = py; dof = 8; }
-        while (dof < 8) {
+        else { rx = px; ry = py; dof = 20; }
+        while (dof < 20) {
             mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = my * mapX + mx;
-            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { hmt = mapdataWall[mp] - 1; hx = rx; hy = ry; disH = distance(px, py, hx, hy); dof = 8; }
+            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { hmt = mapdataWall[mp] - 1; hx = rx; hy = ry; disH = distance(px, py, hx, hy); dof = 20; }
             else { rx += xo; ry += yo; dof += 1; }
         }
 
@@ -138,10 +180,10 @@ void Game::Rays() {
         float nTan = -tan(ra * PI / 180.0);
         if (ra > 90 && ra < 270) { rx = (((int)px >> 6) << 6) - 0.0001; ry = (px - rx) * nTan + py; xo = -64; yo = -xo * nTan; }
         else if (ra < 90 || ra > 270) { rx = (((int)px >> 6) << 6) + 64; ry = (px - rx) * nTan + py; xo = 64; yo = -xo * nTan; }
-        else { rx = px; ry = py; dof = 8; }
-        while (dof < 8) {
+        else { rx = px; ry = py; dof = 20; }
+        while (dof < 20) {
             mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = my * mapX + mx;
-            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { vmt = mapdataWall[mp] - 1; vx = rx; vy = ry; disV = distance(px, py, vx, vy); dof = 8; }
+            if (mp >= 0 && mp < mapX*mapY && mapdataWall[mp] > 0) { vmt = mapdataWall[mp] - 1; vx = rx; vy = ry; disV = distance(px, py, vx, vy); dof = 20; }
             else { rx += xo; ry += yo; dof += 1; }
         }
 
@@ -152,11 +194,11 @@ void Game::Rays() {
 
         float ca = fixAng(pa - ra); 
         disT = disT * cos(ca * PI / 180.0); 
-        float lineH = (64 * 320) / disT;
+        float lineH = (mapSize*640) / disT;
         float ty_step = 32.0 / (float)lineH;
         float ty_off = 0;
-        if (lineH > 320) { ty_off = (lineH - 320) / 2.0; lineH = 320; }
-        float lineO = 160 - lineH / 2;
+        if (lineH > 640) { ty_off = (lineH - 640) / 2.0; lineH = 640; }
+        float lineO = 320 - lineH / 2;
 
         float tx;
         if (shade == 1.0) { tx = (int)(rx / 2.0) % 32; if (ra > 180) tx = 31 - tx; }
@@ -171,7 +213,7 @@ void Game::Rays() {
             float c2 = Img[3*tex_index+1] * shade; 
             float c3 = Img[3*tex_index+2] * shade; 
             rectangle.setFillColor(sf::Color( c1, c2, c3));
-            rectangle.setPosition(sf::Vector2f(r * 8 + 530, lineO + y));
+            rectangle.setPosition(sf::Vector2f(r * 8 , lineO + y));
             window->draw(rectangle);
             ty += ty_step;
         }
@@ -180,10 +222,10 @@ void Game::Rays() {
         float sinRa = sin(ra * PI / 180.0);
         float cosCa = cos(ca * PI / 180.0);
 
-        for (int y = (int)(lineO + lineH); y < 320; y++) {
-            float dy = y - 160.0;
+        for (int y = (int)(lineO + lineH); y < 640; y++) {
+            float dy = y - 320.0;
             if (dy < 1) dy = 1;
-            float dist = (160.0 * 32.0) / (dy * cosCa);
+            float dist = (320.0 * 32.0) / (dy * cosCa);
 
             float worldX = px + cosRa * dist * 2.0;
             float worldY = py + sinRa * dist * 2.0;
@@ -205,33 +247,33 @@ void Game::Rays() {
             float cf2 = Img[(floorTex * 1024 + tex_pixel)*3+1] ;
             float cf3 = Img[(floorTex * 1024 + tex_pixel)*3+2] ;
             rectangle.setFillColor(sf::Color(cf1, cf2, cf3));
-            rectangle.setPosition(sf::Vector2f(r * 8 + 530, (float)y));
+            rectangle.setPosition(sf::Vector2f(r * 8, (float)y));
             window->draw(rectangle);
             
             float cc1 = Img[(ceilTex * 1024 + tex_pixel)*3] ;
             float cc2 = Img[(ceilTex * 1024 + tex_pixel)*3+1] ;
             float cc3 = Img[(ceilTex * 1024 + tex_pixel)*3+2] ;
             rectangle.setFillColor(sf::Color(cc1,cc2,cc3));
-            rectangle.setPosition(sf::Vector2f(r * 8 + 530, (float)(320 - y)));
+            rectangle.setPosition(sf::Vector2f(r * 8 , (float)(640 - y)));
             window->draw(rectangle);
         }
-        ra = fixAng(ra + 1);
+        ra = fixAng(ra + 0.5);
     }
 }
 
 void Game::Editmap(int *MapData , int Mode /*1 - wall , 2 - Floor , 3 - Celling*/){
     if(Mode==1){
-        for(int i=0;i<64;i++){
+        for(int i=0;i<mapX*mapY;i++){
             mapdataWall[i]=MapData[i];
         }
     }
     else if(Mode==2){
-        for(int i=0;i<64;i++){
+        for(int i=0;i<mapX*mapY;i++){
             mapF[i]=MapData[i];
         }
     }
     else if(Mode==3){
-        for(int i=0;i<64;i++){
+        for(int i=0;i<mapX*mapY;i++){
             mapC[i]=MapData[i];
         }
     }
@@ -239,7 +281,7 @@ void Game::Editmap(int *MapData , int Mode /*1 - wall , 2 - Floor , 3 - Celling*
 
 
 void Game::GameLoop(){
-    while (window->isOpen())
+    while (window->isOpen() && state == 1)
     {
         while (const std::optional event = window->pollEvent())
         {
@@ -254,26 +296,33 @@ void Game::GameLoop(){
 
 void Game::Render(){
     window->clear(sf::Color(100,100,100));
-    for(int i=0;i<mapY;i++){
-        for(int j=0;j<mapX;j++){
-            if(mapdataWall[i*mapX+j]==0){
-                BRect->setPosition(sf::Vector2f(j*mapSize+1,i*mapSize+1));
-                window->draw(*BRect);
-            }
-            else if(mapdataWall[i*mapX+j]>0){
-                WRect->setPosition(sf::Vector2f(j*mapSize+1,i*mapSize+1));
-                window->draw(*WRect);
-            }
-        }
-    }
+    // for(int i=0;i<mapY;i++){
+    //     for(int j=0;j<mapX;j++){
+    //         if(mapdataWall[i*mapX+j]==0){
+    //             BRect->setPosition(sf::Vector2f(j*mapSize+1,i*mapSize+1));
+    //             window->draw(*BRect);
+    //         }
+    //         else if(mapdataWall[i*mapX+j]>0){
+    //             WRect->setPosition(sf::Vector2f(j*mapSize+1,i*mapSize+1));
+    //             window->draw(*WRect);
+    //         }
+    //     }
+    // }
     Rays();
-    p1->updatepos();
-    window->draw(*p1->Cpointer());
-    window->draw(*p1->Rpointer());
+    p1->prevtime=p1->elapsedtime;
+    p1->elapsedtime=Clck->getElapsedTime().asSeconds();
+
+    Clck->restart();
+
+    // p1->updatepos();
+    // window->draw(*p1->Cpointer());
+    // window->draw(*p1->Rpointer());
     window->display();
+    cout<<p1->elapsedtime;
 }
 
-void Game::Inputs(){
+void Game::Inputs(){ 
+       
     int xo=0; if(p1->pdxpos()<0){xo = -10;}else{xo=10;}
     int yo=0; if(p1->pdypos()<0){yo = -10;}else{yo=10;}
     int ipx=p1->pxpos()/mapSize; int ipx_add_xo=(p1->pxpos()+xo)/mapSize; int ipx_sub_xo=(p1->pxpos()-xo)/mapSize; 
@@ -281,18 +330,23 @@ void Game::Inputs(){
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)){
         p1->A();
     }
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)){
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)){
        p1->D();
     }
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S)){
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S)){
             if(mapdataWall[ipy*mapX + ipx_sub_xo]==0){p1->incpx(-1);}
             if(mapdataWall[ipy_sub_yo*mapX + ipx]==0){p1->incpy(-1);} 
+            if(mapF[ipy*mapX + ipx]==5){state=2;}
+            if(mapF[ipy*mapX + ipx]==4){state=3;}
     }
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W)){
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W)){
             if(mapdataWall[ipy*mapX + ipx_add_xo]==0){p1->incpx(1);}
             if(mapdataWall[ipy_add_yo*mapX + ipx]==0){p1->incpy(1);} 
+            if(mapF[ipy*mapX + ipx]==5){state=2;}
+            if(mapF[ipy*mapX + ipx]==4){state=3;}
+
     }
-    else if ( sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)){
+    if ( sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)){
         if(p1->pdxpos()<0){xo = -20;}else{xo=20;}
         if(p1->pdypos()<0){yo = -20;}else{yo=20;}
         ipx=p1->pxpos()/mapSize; ipx_add_xo=(p1->pxpos()+xo)/mapSize; 
@@ -304,6 +358,76 @@ void Game::Inputs(){
 
 int main()
 {
-    Game G2(10,10);
+    Game G2(20,20);
+    do{
+    G2.setstate(1);
+    (G2.pptr())->psetpos(96,96);
+    {int Map[400]={1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,0,1,
+                  1,0,1,0,0,0,1,0,0,0,1,0,1,0,1,1,1,1,0,1,
+                  1,0,1,0,0,0,1,0,2,1,0,0,1,0,1,0,0,0,0,1,
+                  1,4,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,1,0,1,
+                  1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,
+                  1,0,0,0,1,0,1,0,1,0,0,0,0,0,1,0,0,0,0,1,
+                  1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1,
+                  1,0,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,1,0,1,
+                  1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+                  1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1,1,1,0,1,
+                  1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,0,1,
+                  1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,
+                  1,0,1,0,1,0,1,0,1,0,1,1,1,0,0,1,0,1,0,1,
+                  1,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,0,0,1,
+                  1,1,1,1,1,0,1,0,1,1,1,0,1,1,1,1,1,1,1,1,
+                  1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
+    G2.Editmap(Map,1);}
+   {int Map[400]={1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
+    G2.Editmap(Map,3);}
+    {int Map[400]={6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,0,6,6,6,6,6,5,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,4,4,4,4,4,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,5,5,6,
+                   6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,};
+
+    G2.Editmap(Map,2);}
     G2.GameLoop();
+    if(G2.getstate()==3){G2.Win();}
+    else if(G2.getstate()==2){G2.Lose();}
+    Sleep(5000);}while(G2.getstate()!=3);
+    return 0;
 }
